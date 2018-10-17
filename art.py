@@ -7,11 +7,14 @@ cap = cv2.VideoCapture(0)
 
 while(True):
     ret, frame = cap.read()
+
+    print (frame[1][1][1])
     # comvert frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Create window displaying grayscale
     cv2.imshow('frame', gray)
+
     # Wait between frames. Changing this is how slow and fast motion happen
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
