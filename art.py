@@ -3,11 +3,12 @@
 import cv2
 import numpy as np
 import math
+import copy
 
 cap = cv2.VideoCapture(0)
 # cap = cv2.VideoCapture('~/Toolboxes/CompVis/Spin.avi')
 
-class color():
+class Color():
     """A container for blue, green, red values to return to OpenCV"""
     def __init__(self, B, G=0, R=0):
         if type(B) != int:
@@ -27,25 +28,25 @@ class color():
     def list(self):
         return [self.B, self.G, self.R]
 
-black = color(0,0,0)
-white = color(255,255,255)
-red = color(0,0,255)
-orange = color(0,140,255)
-yellow = color(0,215,255)
-green = color(0,255,0)
-cyan = color(255,255,0)
-blue = color(255,0,0)
-purple = color(211,0,148)
-magenta = color(255,0,255)
+black = Color(0,0,0)
+white = Color(255,255,255)
+red = Color(0,0,255)
+orange = Color(0,140,255)
+yellow = Color(0,215,255)
+green = Color(0,255,0)
+cyan = Color(255,255,0)
+blue = Color(255,0,0)
+purple = Color(211,0,148)
+magenta = Color(255,0,255)
 
 
-class pixel():
+class Pixel():
     """A container for x, y, and color values to be packed into changes lists and groups"""
     def __init__(self, x, y, c=black):
         self.x = x
         self.y = y
-        if type(c) != color:
-            c = color(c)
+        if type(c) != Color:
+            c = Color(c)
         self.color = c
 
     # def __repr__(self):
@@ -57,7 +58,7 @@ class pixel():
     def getXY(self):
         return (self.x, self.y)
 
-class group():
+class Group():
     """Batches of pixels"""
     def __init__(self, pixelList):
         self.pixels = pixelList
@@ -96,15 +97,15 @@ def isDif(pixelColor1,pixelColor2):
 
 def findMove(frame, lastFrame, lastLastFrame):
     """Detects changing pixel colors and reports their x,y coordinates"""
-    changes = group([]) #list of x,y tuples of pixels that changed
+    changes = Group([]) #list of x,y tuples of pixels that changed
     for y in range(0, height-1, cS):
         for x in range(0, width-1, cS):
-            if isDif(color(frame[y][x]),color(lastFrame[y][x])) and isDif(color(lastFrame[y][x]),color(lastLastFrame[y][x])):
-                changes.addPixels(pixel(x,y,frame[y][x]))
+            if isDif(Color(frame[y][x]),Color(lastFrame[y][x])) and isDif(Color(lastFrame[y][x]),Color(lastLastFrame[y][x])):
+                changes.addPixels(Pixel(x,y,frame[y][x]))
     return changes
 
 def isDiagonalTo(pixel1, changes):
-    """checks if a pixel in changes has another pixel adjacent to it"""
+    """checks if a pixel in changes has another pixel diagonally adjacent to it"""
     for pixel2 in changes.pixels:
         # print('xDiff:', pixel1.x-pixel2.x, 'yDiff:', pixel1.y-pixel2.y, 'testing against cS of:', cS)
         if abs(pixel1.x-pixel2.x) == cS and abs(pixel1.y-pixel2.y) == cS:
@@ -112,6 +113,7 @@ def isDiagonalTo(pixel1, changes):
     return False
 
 def isLine(pixel1, changes):
+    """checks if a pixel in changes has another horizontally or vertically pixel adjacent to it"""
     for pixel2 in changes.pixels:
         if abs(pixel1.x-pixel2.x) == cS and pixel1.y == pixel2.y:
             return True
@@ -119,9 +121,13 @@ def isLine(pixel1, changes):
             return True
     return False
 
+def isTouching(pixel1,pixel2):
+    """checks if a pixel 2 pixels are touching diagonally, vertically or horizontally"""
+    return isDiagonalTo(pixel1,pixel2) or isLine(pixel1,pixel2)
+
 def findDiagonals(changes):
     """Detects a diagonal pair of changing pixel colors and reports their x,y coordinates"""
-    diagonalChanges = group([])
+    diagonalChanges = Group([])
     for pixel in changes.pixels:
         if isDiagonalTo(pixel,changes):
             diagonalChanges.addPixels(pixel)
@@ -129,7 +135,7 @@ def findDiagonals(changes):
 
 def findLines(changes):
     """Detects a square of changing pixel colors and reports their x,y coordinates"""
-    lineChanges = group([])
+    lineChanges = Group([])
     for pixel in changes.pixels:
         if isLine(pixel,changes):
             lineChanges.addPixels(pixel)
@@ -144,11 +150,37 @@ def showMove(frame, changes, color):
         # frame[y:(y+cS)][x:(x+cS)] = [0,0,255]
     return frame
 
+def findThisGroup(foundPixel, changes):
+    adjPixels = []
+    for pixel in changes:
+        if isTouching(foundPixel, pixel):
+            adjPixels.append(pixel)
+    if len(adjPixels) == 0:
+        return [foundPixel]
+    changes.remove(foundPixel)
+    res = [foundPixel]
+    for pixel in adjPixel:
+        res += findThisGroup (pixel,changes)
+    return res
+
+def findAllGroups(changes):
+    """Finds the groups of changed pixels in frame"""
+    groupToSplit = copy.deepcopy(changes)
+    contigGroups = []
+    for pixel in groupToSplit.pixels:
+        contigGroups = contigGroups + findThisGroup(pixel, groupToSplit)
+        # groupToSplit.remove(those pixels)
+
+def findLargestGroup(groups):
+    """Finds the largest group of changed pixels in frame"""
+    groupList = findAllGropus(changes)
+    #groupName.size each group
+    #find the max amond the sizes, return that group
 
 #Cheating! Doing things once so we don't redefine constants constantly
 ret, lastFrame = cap.read()
 lastLastFrame = lastFrame
-lastMajorChanges = group([])
+lastMajorChanges = Group([])
 height, width = lastFrame.shape[:2]
 cS = 7
 
@@ -157,11 +189,11 @@ while(True):
 
     changes = findMove(frame, lastFrame, lastLastFrame)
     majorChanges = findDiagonals(changes)
-    #changes is a group object
+    #changes is a Group object
     frame = showMove(frame, majorChanges, magenta)
     frame = showMove(frame, lastMajorChanges, cyan)
 
-    # Create window displaying frame, with colors drawn on top
+    # Create window displaying frame, with Colors drawn on top
     cv2.imshow('Frame', frame)
 
     lastLastFrame = lastFrame
@@ -182,15 +214,15 @@ cv2.destroyAllWindows()
 #Debugging and testing dumping ground:
 #to use, change != to == and the while(True) to while(False)
 if __name__ != "__main__":
-    newGroup = group([])
+    newGroup = Group([])
     print(newGroup)
-    p1 = pixel(3, 8)
-    p2 = pixel(5,2)
-    p3 = pixel(2, 1, [0,255,0])
-    p4 = pixel(3,1, blue)
-    c1 = color(1,1,1)
-    c2 = color([2,2,2])
-    c3 = color ([3,2,2])
+    p1 = Pixel(3, 8)
+    p2 = Pixel(5,2)
+    p3 = Pixel(2, 1, [0,255,0])
+    p4 = Pixel(3,1, blue)
+    c1 = Color(1,1,1)
+    c2 = Color([2,2,2])
+    c3 = Color ([3,2,2])
 
     # newGroup.addPixels([p1,p2,p3,p4])
     # print(type(newGroup.pixels))
