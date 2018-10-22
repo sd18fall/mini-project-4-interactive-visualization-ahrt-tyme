@@ -168,12 +168,20 @@ def findAllGroups(changes):
     groupToSplit = copy.deepcopy(changes)
     contigGroups = []
     for pixel in groupToSplit.pixels:
-        contigGroups = contigGroups + findThisGroup(pixel, groupToSplit)
+        newGroup = findThisGroup(pixel, groupToSplit)
+        contigGroups = contigGroups + newGroup
+        for pixel in newGroup:
+            groupToSplit.remove(pixel)
+    return contigGroups
         # groupToSplit.remove(those pixels)
 
 def findLargestGroup(groups):
     """Finds the largest group of changed pixels in frame"""
     groupList = findAllGropus(changes)
+    for group in groupList:
+        length += len(group)
+    longestLength = max(legth)
+    largestGroup = groupList[longestLength]
     #groupName.size each group
     #find the max amond the sizes, return that group
 
