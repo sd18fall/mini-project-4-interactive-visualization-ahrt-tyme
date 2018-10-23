@@ -42,12 +42,20 @@ magenta = Color(255,0,255)
 
 class Pixel():
     """A container for x, y, and color values to be packed into changes lists and groups"""
-    def __init__(self, x, y, c=black):
-        self.x = x
-        self.y = y
-        if type(c) != Color:
-            c = Color(c)
-        self.color = c
+    def __init__(self, x=None, y=None, c=black, oldPixel = None):
+        if oldPixel != None:
+            self.color = copy.deepcopy(oldPixel.color)
+            self.x = oldPixel.x
+            self.y = oldPixel.y
+        else:
+            self.x = x
+            self.y = y
+
+            if type(c) != Color:
+                c = Color(c)
+            self.color = c
+
+            self.pixels = [self]
 
     # def __repr__(self):
     #     return "("+str(self.x)+' , '+str(self.y)+")"
@@ -55,8 +63,19 @@ class Pixel():
     def __str__(self):
         return "({}, {}, {})".format(self.x, self.y, self.color)
 
+    # def __repr__(self):
+    #     return "{}, {}, {}".format(self.x, self.y, self.color)
+
     def getXY(self):
         return (self.x, self.y)
+
+    # def size(self):
+    #     return 1
+
+    def __eq__(self, pixel2):
+        if pixel2 is None:
+            return False
+        return self.x == pixel2.x and self.y == pixel2.y
 
 class Group():
     """Batches of pixels"""
@@ -71,13 +90,23 @@ class Group():
             pixelList = [pixelList]
         self.pixels += pixelList
 
+    def removePixel(self, pixelList):
+        if type(pixelList) != list:
+            pixelList = [Pixel(oldPixel = pixelList)]
+        print('\ngroup to remove from:', self)
+        for pixel in pixelList:
+            print('\npixel to remove:', pixel)
+            self.pixels.remove(pixel)
+
     def size(self):
         return len(self.pixels)
 
     def __str__(self):
         ret = ''
-        for pixel in self.pixels:
-            ret += str(pixel)
+        if self.pixels != []:
+            ret = str(self.pixels[0])
+            for pixel in self.pixels[1:]:
+                ret += ', ' + str(pixel)
         return ret
 
 def isDif(pixelColor1,pixelColor2):
@@ -152,15 +181,19 @@ def showMove(frame, changes, color):
 
 def findThisGroup(foundPixel, changes):
     adjPixels = []
-    for pixel in changes:
-        if isTouching(foundPixel, pixel):
+    # if type(changes) != Group:
+    #     print(changes, '<-----------------')
+    #     changes = Group([]).addPixels(changes)
+    for pixel in changes.pixels:
+        if isTouching(pixel, foundPixel):
             adjPixels.append(pixel)
     if len(adjPixels) == 0:
-        return [foundPixel]
-    changes.remove(foundPixel)
-    res = [foundPixel]
-    for pixel in adjPixel:
-        res += findThisGroup (pixel,changes)
+        return Group([foundPixel])
+    changes.removePixel(foundPixel)
+    res = Group([foundPixel])
+    for pixel in adjPixels:
+        temp = findThisGroup (pixel, changes)
+        res.addPixels(temp.pixels)
     return res
 
 def findAllGroups(changes):
@@ -169,19 +202,28 @@ def findAllGroups(changes):
     contigGroups = []
     for pixel in groupToSplit.pixels:
         newGroup = findThisGroup(pixel, groupToSplit)
-        contigGroups = contigGroups + newGroup
-        for pixel in newGroup:
-            groupToSplit.remove(pixel)
+        contigGroups.append(newGroup)
+        for pixel in newGroup.pixels:
+            # print (pixel)
+            # print ('\n', groupToSplit)
+            groupToSplit.removePixel(pixel)
     return contigGroups
         # groupToSplit.remove(those pixels)
 
 def findLargestGroup(groups):
     """Finds the largest group of changed pixels in frame"""
-    groupList = findAllGropus(changes)
-    for group in groupList:
-        length += len(group)
-    longestLength = max(legth)
-    largestGroup = groupList[longestLength]
+    largestGroup = Group([])
+    groupList = findAllGroups(changes)
+    print("LOOK AT ME" , groupList)
+    if len(groupList) != 0:
+        lengthList = []
+        for group in groupList:
+            lengthList.append(group.size())
+        print(groupList)
+        longestLength = max(lengthList)
+        longestIndex = lengthList.index(longestLength)
+        largestGroup = groupList[longestIndex]
+    return largestGroup
     #groupName.size each group
     #find the max amond the sizes, return that group
 
@@ -191,18 +233,31 @@ lastLastFrame = lastFrame
 lastMajorChanges = Group([])
 height, width = lastFrame.shape[:2]
 cS = 7
+trail = 0 #set this for whether pixels should trail there way offscreen
+#default to falsey
 
 while(True):
     ret, frame = cap.read()
 
     changes = findMove(frame, lastFrame, lastLastFrame)
-    majorChanges = findDiagonals(changes)
+    majorChanges = findLines(findDiagonals(changes))
+    bigGroup = findLargestGroup(findAllGroups(majorChanges))
+    print(bigGroup)
     #changes is a Group object
-    frame = showMove(frame, majorChanges, magenta)
-    frame = showMove(frame, lastMajorChanges, cyan)
+    if trail:
+        frame = showMove(frame, majorChanges, magenta)
+        frame = showMove(frame, lastMajorChanges, cyan)
+        # Create window displaying frame, with Colors drawn on top
+        cv2.imshow('Frame', frame)
+    else:
+        display = copy.deepcopy(frame)
+        display = showMove(display, majorChanges, magenta)
+        display = showMove(display, lastMajorChanges, cyan)
+        display = showMove(display, bigGroup, yellow)
+        # Create window displaying frame, with Colors drawn on top
+        cv2.imshow('Frame', display)
 
-    # Create window displaying frame, with Colors drawn on top
-    cv2.imshow('Frame', frame)
+
 
     lastLastFrame = lastFrame
     lastFrame = frame
