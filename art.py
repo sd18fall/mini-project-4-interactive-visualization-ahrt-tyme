@@ -91,11 +91,12 @@ class Group():
         self.pixels += pixelList
 
     def removePixel(self, pixelList):
-        if type(pixelList) != list:
+        # if type(pixelList) != list:
+        if type(pixelList) == Group:
+            pixelList = pixelList.pixels
+        elif type(pixelList) == Pixel:
             pixelList = [Pixel(oldPixel = pixelList)]
-        print('\ngroup to remove from:', self)
         for pixel in pixelList:
-            print('\npixel to remove:', pixel)
             self.pixels.remove(pixel)
 
     def size(self):
@@ -109,6 +110,10 @@ class Group():
                 ret += ', ' + str(pixel)
         return ret
 
+    def __add__(self, other):
+        if type(other) == Group:
+            self.addPixels(other.pixels)
+
 def isDif(pixelColor1,pixelColor2):
     currBlue = pixelColor1.B
     lastBlue = pixelColor2.B
@@ -117,7 +122,6 @@ def isDif(pixelColor1,pixelColor2):
     currRed = pixelColor1.R
     lastRed = pixelColor2.R
 
-    changeThresh = 20
     blueChanged = abs(currBlue-lastBlue) > changeThresh
     greenChanged = abs(currGreen-lastGreen) > changeThresh
     redChanged = abs(currRed-lastRed) > changeThresh
@@ -136,7 +140,6 @@ def findMove(frame, lastFrame, lastLastFrame):
 def isDiagonalTo(pixel1, changes):
     """checks if a pixel in changes has another pixel diagonally adjacent to it"""
     for pixel2 in changes.pixels:
-        # print('xDiff:', pixel1.x-pixel2.x, 'yDiff:', pixel1.y-pixel2.y, 'testing against cS of:', cS)
         if abs(pixel1.x-pixel2.x) == cS and abs(pixel1.y-pixel2.y) == cS:
             return True
     return False
@@ -163,12 +166,20 @@ def findDiagonals(changes):
     return diagonalChanges
 
 def findLines(changes):
-    """Detects a square of changing pixel colors and reports their x,y coordinates"""
+    """Detects a line of changing pixel colors and reports their x,y coordinates"""
     lineChanges = Group([])
     for pixel in changes.pixels:
         if isLine(pixel,changes):
             lineChanges.addPixels(pixel)
     return lineChanges
+
+def findTouching(changes):
+    """Detects lines or diagonals of changing pixel colors and reports their x,y coordinates"""
+    touchingChanges = Group([])
+    for pixel in changes.pixels:
+        if isTouching(pixel,changes):
+            touchingChanges.addPixels(pixel)
+    return touchingChanges
 
 
 def showMove(frame, changes, color):
@@ -181,15 +192,14 @@ def showMove(frame, changes, color):
 
 def findThisGroup(foundPixel, changes):
     adjPixels = []
-    # if type(changes) != Group:
-    #     print(changes, '<-----------------')
-    #     changes = Group([]).addPixels(changes)
     for pixel in changes.pixels:
         if isTouching(pixel, foundPixel):
             adjPixels.append(pixel)
     if len(adjPixels) == 0:
         return Group([foundPixel])
-    changes.removePixel(foundPixel)
+    if foundPixel in changes.pixels:
+        changes.removePixel(foundPixel)
+    changes.removePixel(adjPixels)
     res = Group([foundPixel])
     for pixel in adjPixels:
         temp = findThisGroup (pixel, changes)
@@ -201,25 +211,21 @@ def findAllGroups(changes):
     groupToSplit = copy.deepcopy(changes)
     contigGroups = []
     for pixel in groupToSplit.pixels:
-        newGroup = findThisGroup(pixel, groupToSplit)
-        contigGroups.append(newGroup)
-        for pixel in newGroup.pixels:
-            # print (pixel)
-            # print ('\n', groupToSplit)
-            groupToSplit.removePixel(pixel)
+        if pixel in groupToSplit.pixels:
+            newGroup = findThisGroup(pixel, groupToSplit)
+            contigGroups.append(newGroup)
+            #groupToSplit.removePixel(newGroup.pixels)
     return contigGroups
         # groupToSplit.remove(those pixels)
 
-def findLargestGroup(groups):
+def findLargestGroup(changes):
     """Finds the largest group of changed pixels in frame"""
     largestGroup = Group([])
     groupList = findAllGroups(changes)
-    print("LOOK AT ME" , groupList)
     if len(groupList) != 0:
         lengthList = []
         for group in groupList:
             lengthList.append(group.size())
-        print(groupList)
         longestLength = max(lengthList)
         longestIndex = lengthList.index(longestLength)
         largestGroup = groupList[longestIndex]
@@ -227,44 +233,76 @@ def findLargestGroup(groups):
     #groupName.size each group
     #find the max amond the sizes, return that group
 
-#Cheating! Doing things once so we don't redefine constants constantly
+def options(frame, changes):
+    if not showSelf:
+        frame = np.zeros((height, width, 3))
+
+    if pickiness == 0:
+        majorChanges = findTouching(changes)
+    elif pickiness == 1:
+        majorChanges = findLines(changes)
+    elif pickiness == 2:
+        majorChanges = findDiagonals(changes)
+    elif pickiness == 3:
+        majorChanges = findLines(findDiagonals(changes))
+
+    if trail:
+        display = frame
+    else:
+        display = copy.deepcopy(frame)
+
+    if showSmallChanges:
+        display = showMove(display, majorChanges, magenta)
+
+    if showPastChanges:
+        display = showMove(display, lastMajorChanges, cyan)
+
+    if showBigGroup:
+        bigGroup = findLargestGroup(majorChanges)
+        display = showMove(display, bigGroup, yellow)
+
+    return display
+
+#-----Cheating! Doing things once so we don't redefine constants constantly-----
 ret, lastFrame = cap.read()
 lastLastFrame = lastFrame
 lastMajorChanges = Group([])
 height, width = lastFrame.shape[:2]
+
+#----------Handles: things to change to affect sensitivity and modes:----------
 cS = 7
+changeThresh = 20
 trail = 0 #set this for whether pixels should trail there way offscreen
 #default to falsey
+showPastChanges = 1
+pastChangesColor = blue
+showSelf = 0 #show image from webcam, or black background
+showBigGroup = 1
+showSmallChanges = 1
+pickiness = 0 # how big things need to be before they're not just noise
+# 0 for what we like (either or), 1 for only findLines,
+#2 for only findDiagonals, 3 to require both
+speed = 50 #miliseconds per frame; higher is slower
 
+# ==============================================================================
+#                   Main loop
+# ==============================================================================
 while(True):
     ret, frame = cap.read()
 
     changes = findMove(frame, lastFrame, lastLastFrame)
-    majorChanges = findLines(findDiagonals(changes))
-    bigGroup = findLargestGroup(findAllGroups(majorChanges))
-    print(bigGroup)
-    #changes is a Group object
-    if trail:
-        frame = showMove(frame, majorChanges, magenta)
-        frame = showMove(frame, lastMajorChanges, cyan)
-        # Create window displaying frame, with Colors drawn on top
-        cv2.imshow('Frame', frame)
-    else:
-        display = copy.deepcopy(frame)
-        display = showMove(display, majorChanges, magenta)
-        display = showMove(display, lastMajorChanges, cyan)
-        display = showMove(display, bigGroup, yellow)
-        # Create window displaying frame, with Colors drawn on top
-        cv2.imshow('Frame', display)
+    artFrame = options(frame, changes)
 
+    cv2.imshow('Art', artFrame)
 
 
     lastLastFrame = lastFrame
     lastFrame = frame
-    lastMajorChanges = majorChanges
+    if showPastChanges:
+        lastMajorChanges = majorChanges
 
     # Wait between frames. Changing this is how slow and fast motion happen
-    if cv2.waitKey(20) & 0xFF == ord('q'):
+    if cv2.waitKey(speed) & 0xFF == ord('q'):
         break
 
 
@@ -277,29 +315,33 @@ cv2.destroyAllWindows()
 #Debugging and testing dumping ground:
 #to use, change != to == and the while(True) to while(False)
 if __name__ != "__main__":
-    newGroup = Group([])
-    print(newGroup)
-    p1 = Pixel(3, 8)
-    p2 = Pixel(5,2)
-    p3 = Pixel(2, 1, [0,255,0])
-    p4 = Pixel(3,1, blue)
-    c1 = Color(1,1,1)
-    c2 = Color([2,2,2])
-    c3 = Color ([3,2,2])
+    testFrame = np.zeros((250,250,3))
 
-    # newGroup.addPixels([p1,p2,p3,p4])
-    # print(type(newGroup.pixels))
-    # print(newGroup.pixels)
-    # newGroup.addPixels([p1,p1,p2])
-    # print(newGroup.pixels)
-    # print(p1.color, p2.color, p3.color, p4.color)
+    p1 = Pixel(10, 3)
+    p2 = Pixel(10+cS, 3+cS)
+    p3 = Pixel(100, 100)
+    p4 = Pixel(200,200)
+    p5 = Pixel(10, 3+cS)
+    p6 = Pixel(100, 100+cS)
+    p7 = Pixel(10+2*cS, 3)
+    p8 = Pixel(10, 3+2*cS)
+    p9 = Pixel(10+3*cS, 3)
 
-    print(type(c1))
-    print(type(c2.tuple()))
-    bs = c2.tuple()
-    print(bs)
-    print(type(bs))
-    bull = c3.list()
-    print(bull)
-    print(type(bull))
-    print(str(c3))
+
+    testChanges = Group([p1,p2,p3,p4,p5,p6,p7,p8,p9])
+
+    #output = findThisGroup(p1,testChanges)
+    #output = findAllGroups(testChanges)
+    output = findLargestGroup(testChanges)
+
+    testDisplay = showMove(testFrame, testChanges, blue)
+    testDisplay = showMove(testFrame, output, red)
+    # bleh = 50
+    # for gropus in output:
+    #     clur = Color(bleh,0,0)
+    #     testDisplay = showMove(testFrame, gropus, clur)
+    #     bleh += 75
+
+    cv2.imshow('Testing', testDisplay)
+
+    cv2.waitKey(0) & 0xFF == ord('q')
