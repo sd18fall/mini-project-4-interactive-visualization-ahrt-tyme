@@ -1,5 +1,9 @@
-""" Experiment with face detection and image filtering using OpenCV """
+""" Motion detecting art! Using a webcam, detects pixels changing color
+and displays them according to several options."""
 
+# ==============================================================================
+#                               Setup
+# ==============================================================================
 import cv2
 import numpy as np
 import math
@@ -7,6 +11,13 @@ import copy
 
 cap = cv2.VideoCapture(0)
 # cap = cv2.VideoCapture('~/Toolboxes/CompVis/Spin.avi')
+
+print("\n         Welcome to Ahrt Tyme! Press 'q' on the pop-up window to quit.\n")
+
+
+# ==============================================================================
+#                               Classes
+# ==============================================================================
 
 class Color():
     """A container for blue, green, red values to return to OpenCV"""
@@ -113,6 +124,12 @@ class Group():
     def __add__(self, other):
         if type(other) == Group:
             self.addPixels(other.pixels)
+
+
+
+# ==============================================================================
+#                               Functions
+# ==============================================================================
 
 def isDif(pixelColor1,pixelColor2):
     currBlue = pixelColor1.B
@@ -252,16 +269,19 @@ def options(frame, changes):
         display = copy.deepcopy(frame)
 
     if showSmallChanges:
-        display = showMove(display, majorChanges, magenta)
+        display = showMove(display, majorChanges, smallChangesColor)
 
     if showPastChanges:
-        display = showMove(display, lastMajorChanges, cyan)
+        global lastMajorChanges
+        display = showMove(display, lastMajorChanges, pastChangesColor)
+        lastMajorChanges = majorChanges
 
     if showBigGroup:
         bigGroup = findLargestGroup(majorChanges)
-        display = showMove(display, bigGroup, yellow)
+        display = showMove(display, bigGroup, bigGroupColor)
 
     return display
+
 
 #-----Cheating! Doing things once so we don't redefine constants constantly-----
 ret, lastFrame = cap.read()
@@ -269,23 +289,73 @@ lastLastFrame = lastFrame
 lastMajorChanges = Group([])
 height, width = lastFrame.shape[:2]
 
-#----------Handles: things to change to affect sensitivity and modes:----------
-cS = 7
-changeThresh = 20
-trail = 0 #set this for whether pixels should trail there way offscreen
-#default to falsey
-showPastChanges = 1
-pastChangesColor = blue
-showSelf = 0 #show image from webcam, or black background
-showBigGroup = 1
-showSmallChanges = 1
-pickiness = 0 # how big things need to be before they're not just noise
-# 0 for what we like (either or), 1 for only findLines,
-#2 for only findDiagonals, 3 to require both
-speed = 50 #miliseconds per frame; higher is slower
+
 
 # ==============================================================================
-#                   Main loop
+#        Choices: things to change to affect sensitivity and modes
+# ==============================================================================
+
+# The size of the pixel block it checks.
+# Smaller means more precise and slower. The minimum a laptop can handle is 7
+cS = 7
+# The color change threshold before a pixel is said to change color
+# Anywhere between 10 and 50 will get results
+changeThresh = 20
+
+# Miliseconds per frame; higher is slower
+# 0 is a single image, which will have no changes to show
+# 20 is a reasonable rate but occasionally laggy with big movements,
+# 50 starts to visually look slightly choppy but runs more smoothly
+# too much higher will run more consistently but look choppier and miss short movements
+speed = 25
+
+#show image from webcam? falsey is a black background
+showSelf = 0 #boolean
+
+# how big things need to be before they're considered not just noise
+# 0 for what we like (either or), 1 for only findLines,
+# 2 for only findDiagonals, 3 to require both
+# increasing number generally increases pickiness and decreases number of changes found
+pickiness = 0 #0,1,2,3
+
+# find and show the largest group of changed pixels?
+showBigGroup = 1 #boolean
+bigGroupColor = yellow #Color
+
+# show all the small changes that aren't in that biggest group?
+showSmallChanges = 1 #boolean
+smallChangesColor = red #Color
+
+# track and show the past frame's changes, for a total of two sets of changes?
+showPastChanges = 1 #boolean
+pastChangesColor = blue #Color
+
+# Have the pixel changes trail their way off the screen rather than dissipating?
+trail = 0 #boolean
+
+# Show the tutorial and preset options?
+tutorial = 1 #boolean
+if tutorial:
+    print("\n--------------------------------------------------------------------------------\n")
+    print("If you haven't yet, use the options in the code to optimize your art experience.\n")
+    print("     You can change several threshold options, choose what is shown,")
+    print("                     and the color it will appear in.")
+    print("    This includes the webcam image itself, movement groupings, and trails.")
+    print("      Remember that Booleans treat 0 as false and anything else as true.\n")
+    print("\n--------------------------------------------------------------------------------\n")
+    print("         For now, try a preset: 'show all', 'minimalist', 'medium'")
+    print("       Anything else will simply keep the most recent coded settings")
+    preset = input('\nPreset to use: ')
+
+    if preset == 'show all':
+        showSelf = 1; showBigGroup = 1; showPastChanges = 1; showSmallChanges = 1; trail = 1
+        speed = 100
+    elif preset == 'minimalist':
+        showSelf = 0; showBigGroup = 1; showPastChanges = 0; showSmallChanges = 0; trail = 0
+    elif preset == 'medium':
+        showSelf = 1; showBigGroup = 1; showPastChanges = 0; showSmallChanges = 1; trail = 0
+# ==============================================================================
+#                               Main loop
 # ==============================================================================
 while(True):
     ret, frame = cap.read()
@@ -295,25 +365,24 @@ while(True):
 
     cv2.imshow('Art', artFrame)
 
-
     lastLastFrame = lastFrame
     lastFrame = frame
-    if showPastChanges:
-        lastMajorChanges = majorChanges
 
     # Wait between frames. Changing this is how slow and fast motion happen
     if cv2.waitKey(speed) & 0xFF == ord('q'):
         break
-
-
 
 # Unbind video capture object and close any created windows.
 cap.release()
 cv2.destroyAllWindows()
 
 
-#Debugging and testing dumping ground:
-#to use, change != to == and the while(True) to while(False)
+
+# ==============================================================================
+#                 Debugging and testing dumping ground:
+#       to use, change != to == and the while(True) to while(False)
+# ==============================================================================
+
 if __name__ != "__main__":
     testFrame = np.zeros((250,250,3))
 
