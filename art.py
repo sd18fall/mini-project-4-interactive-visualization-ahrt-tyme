@@ -208,6 +208,7 @@ def showMove(frame, changes, color):
     return frame
 
 def findThisGroup(foundPixel, changes):
+    """finds a a group of touching pixels starting from one specific pixel"""
     adjPixels = []
     for pixel in changes.pixels:
         if isTouching(pixel, foundPixel):
@@ -251,6 +252,7 @@ def findLargestGroup(changes):
     #find the max amond the sizes, return that group
 
 def options(frame, changes):
+    """sets different factors for display"""
     if not showSelf:
         frame = np.zeros((height, width, 3))
 
@@ -295,6 +297,10 @@ height, width = lastFrame.shape[:2]
 #        Choices: things to change to affect sensitivity and modes
 # ==============================================================================
 
+# Color options are red, orange, yellow, green, cyan, blue, purple, magenta, white, black
+# Or create a tuple of B, G, R values between 0 and 255, such as (0, 126, 0)
+
+
 # The size of the pixel block it checks.
 # Smaller means more precise and slower. The minimum a laptop can handle is 7
 cS = 7
@@ -324,11 +330,11 @@ bigGroupColor = yellow #Color
 
 # show all the small changes that aren't in that biggest group?
 showSmallChanges = 1 #boolean
-smallChangesColor = red #Color
+smallChangesColor = magenta #Color
 
 # track and show the past frame's changes, for a total of two sets of changes?
 showPastChanges = 1 #boolean
-pastChangesColor = blue #Color
+pastChangesColor = cyan #Color
 
 # Have the pixel changes trail their way off the screen rather than dissipating?
 trail = 0 #boolean
@@ -343,17 +349,18 @@ if tutorial:
     print("    This includes the webcam image itself, movement groupings, and trails.")
     print("      Remember that Booleans treat 0 as false and anything else as true.\n")
     print("\n--------------------------------------------------------------------------------\n")
-    print("         For now, try a preset: 'show all', 'minimalist', 'medium'")
+    print("         For now, try a preset: 'retro', 'minimalist', 'techno'")
     print("       Anything else will simply keep the most recent coded settings")
     preset = input('\nPreset to use: ')
 
-    if preset == 'show all':
-        showSelf = 1; showBigGroup = 1; showPastChanges = 1; showSmallChanges = 1; trail = 1
-        speed = 100
+    if preset == 'retro':
+        showSelf = 1; showBigGroup = 0; showPastChanges = 1; showSmallChanges = 1; trail = 1
+        smallChangesColor = magenta; pastChangesColor = cyan
     elif preset == 'minimalist':
-        showSelf = 0; showBigGroup = 1; showPastChanges = 0; showSmallChanges = 0; trail = 0
-    elif preset == 'medium':
-        showSelf = 1; showBigGroup = 1; showPastChanges = 0; showSmallChanges = 1; trail = 0
+        showSelf = 1; showBigGroup = 1; showPastChanges = 0; showSmallChanges = 0; trail = 0
+    elif preset == 'techno':
+        showSelf = 0; showBigGroup = 1; showPastChanges = 1; showSmallChanges = 1; trail = 0
+        smallChangesColor = red; pastChangesColor = blue; bigGroupColor = yellow
 # ==============================================================================
 #                               Main loop
 # ==============================================================================
