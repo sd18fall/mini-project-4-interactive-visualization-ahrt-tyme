@@ -7,7 +7,7 @@ Motion detecting art!
 
 This interactive program displays a live feed from your webcam with an artistic overlay. The code detects changes in color, runs numerous filters on these points, and displays them in colorful form. The user is welcome to run the code without opening it, and play about in the preset display modes, or you can easily open the code and personalize the simple settings to optimize your art experience.
 
-Check out the videos in the repository to get a taste.
+Check out the example in the repository to get a taste - but really, just run it.
 
 ## How to Enjoy
 ### Requires
